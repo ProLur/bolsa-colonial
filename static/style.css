@@ -54,3 +54,29 @@ h1 {
     font-size: 0.8em;
     opacity: 0.6;
 }
+
+.price {
+    font-size: 48px;
+    margin: 20px 0 5px 0;
+    transition: color 0.4s ease;
+}
+
+.price.up {
+    color: #6cff6c;
+}
+
+.price.down {
+    color: #ff6c6c;
+}
+
+.trend {
+    font-size: 14px;
+    opacity: 0.8;
+    margin-bottom: 10px;
+}
+
+canvas {
+    margin: 15px 0;
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+}
