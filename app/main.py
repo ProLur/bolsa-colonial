@@ -26,7 +26,7 @@ def root():
 def get_market():
     return market
 
-@app.post("/buy")
+@app.api_route("/buy", methods=["GET", "POST"])
 def buy(amount: float):
     """
     Compra ficticia.
@@ -35,7 +35,6 @@ def buy(amount: float):
     if amount <= 0:
         return {"error": "La cantidad debe ser positiva"}
 
-    # Impacto simple y controlado
     impact = amount * 0.001
     market["price"] = round(market["price"] + impact, 4)
     market["last_update"] = datetime.utcnow().isoformat()
@@ -47,7 +46,7 @@ def buy(amount: float):
         "timestamp": market["last_update"]
     }
 
-@app.post("/sell")
+@app.api_route("/sell", methods=["GET", "POST"])
 def sell(amount: float):
     """
     Venta ficticia.
