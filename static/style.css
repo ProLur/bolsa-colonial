@@ -1,0 +1,56 @@
+body {
+    background: radial-gradient(circle at top, #0f2027, #000);
+    color: #d0f0ff;
+    font-family: "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 420px;
+    margin: 60px auto;
+    text-align: center;
+}
+
+h1 {
+    font-weight: 300;
+    letter-spacing: 2px;
+}
+
+.subtitle {
+    opacity: 0.7;
+    margin-bottom: 40px;
+}
+
+.card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 0 20px rgba(0, 200, 255, 0.15);
+}
+
+#price {
+    font-size: 48px;
+    margin: 20px 0;
+}
+
+.actions button {
+    background: none;
+    border: 1px solid #4fc3f7;
+    color: #4fc3f7;
+    padding: 10px 20px;
+    margin: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.actions button:hover {
+    background: #4fc3f7;
+    color: #000;
+}
+
+.footer {
+    margin-top: 40px;
+    font-size: 0.8em;
+    opacity: 0.6;
+}
