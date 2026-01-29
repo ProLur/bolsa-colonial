@@ -26,12 +26,10 @@ def root():
 def get_market():
     return market
 
+
 @app.api_route("/buy", methods=["GET", "POST"])
+@app.api_route("/buy/", methods=["GET", "POST"])
 def buy(amount: float):
-    """
-    Compra ficticia.
-    A mayor cantidad, mayor impacto en el precio.
-    """
     if amount <= 0:
         return {"error": "La cantidad debe ser positiva"}
 
@@ -46,12 +44,10 @@ def buy(amount: float):
         "timestamp": market["last_update"]
     }
 
+
 @app.api_route("/sell", methods=["GET", "POST"])
+@app.api_route("/sell/", methods=["GET", "POST"])
 def sell(amount: float):
-    """
-    Venta ficticia.
-    Reduce el precio global.
-    """
     if amount <= 0:
         return {"error": "La cantidad debe ser positiva"}
 
