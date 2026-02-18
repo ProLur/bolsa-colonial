@@ -4,22 +4,89 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bolsa Colonial</title>
-  <link rel="stylesheet" href="static/style.css">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0e17;
+      color: #e0e7ff;
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #a5b4fc;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      margin-bottom: 32px;
+    }
+    .card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+    #price {
+      font-size: 3.5rem;
+      font-weight: bold;
+      color: #c084fc;
+      margin: 16px 0;
+    }
+    #trend {
+      color: #94a3b8;
+      font-size: 1.1rem;
+      margin-bottom: 24px;
+    }
+    .actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+    button {
+      background: #7c3aed;
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #9f7aea;
+      transform: translateY(-2px);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+  </style>
 </head>
 <body>
+
   <div class="container">
     <h1>Bolsa Colonial</h1>
     <p class="subtitle">Mercado interplanetario</p>
+
     <div class="card">
       <h2>Luna CC</h2>
       <div id="price">—</div>
       <div id="trend">Conectando…</div>
+
       <div class="actions">
         <button onclick="buy(100)">Comprar 100</button>
         <button onclick="sell(100)">Vender 100</button>
       </div>
     </div>
   </div>
-  <script src="static/app.js?v=2"></script>
+
+  <script src="static/app.js"></script>
 </body>
 </html>
