@@ -1,97 +1,184 @@
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field
+import httpx
+import os
 from datetime import datetime
-from sqlalchemy.orm import Session
+from decimal import Decimal
+from typing import Dict, Any
+from dotenv import load_dotenv
 
-from .database import engine, SessionLocal
-from .models import Base, Market
+load_dotenv()
 
-app = FastAPI(
-    title="Bolsa Colonial",
-    description="Mercado ficticio compartido ambientado en ciencia ficción",
-    version="0.3.0"
-)
+app = FastAPI(title="Bolsa Colonial - JSONBin")
 
-# Crear tablas si no existen
-Base.metadata.create_all(bind=engine)
+MASTER_KEY = os.getenv("JSONBIN_MASTER_KEY")
+if not MASTER_KEY:
+    raise ValueError("Falta JSONBIN_MASTER_KEY en .env")
 
-# ==========================
-# STATIC FILES (FRONTEND)
-# ==========================
-app.mount("/static", StaticFiles(directory="static"), name="static")
+HEADERS = {
+    "Content-Type": "application/json",
+    "X-Master-Key": MASTER_KEY
+}
 
+MARKET_URL = f"https://api.jsonbin.io/v3/b/{os.getenv('MARKET_BIN_ID')}"
+USERS_URL = f"https://api.jsonbin.io/v3/b/{os.getenv('USERS_BIN_ID')}"
 
-@app.get("/index")
-def index():
-    return FileResponse("static/index.html")
+async def get_bin_data(url: str) -> Dict[str, Any]:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{url}/latest", headers=HEADERS, timeout=10.0)
+        resp.raise_for_status()  # Lanza excepción si no es 200
+        return resp.json()["record"]
 
+async def update_bin(url: str, data: Dict[str, Any]):
+    async with httpx.AsyncClient() as client:
+        resp = await client.put(url, json=data, headers=HEADERS, timeout=10.0)
+        resp.raise_for_status()
 
-# ==========================
-# UTILIDADES
-# ==========================
-def get_market(db: Session) -> Market:
-    market = db.query(Market).filter(Market.symbol == "LUNA_CC").first()
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, description="Nombre de usuario único")
 
-    if not market:
-        market = Market(
-            symbol="LUNA_CC",
-            name="Luna CC",
-            price=1.00
-        )
-        db.add(market)
-        db.commit()
-        db.refresh(market)
+class TradeRequest(BaseModel):
+    username: str
+    quantity: float = Field(..., gt=0, description="Cantidad de LUNA_CC")
 
-    return market
+@app.post("/api/register", summary="Registrar nuevo jugador")
+async def register(user_data: UserCreate):
+    try:
+        data = await get_bin_data(USERS_URL)
+    except Exception as e:
+        raise HTTPException(500, f"Error al conectar con JSONBin: {str(e)}")
 
+    users = data.get("users", [])
+    
+    if any(u["username"].lower() == user_data.username.lower() for u in users):
+        raise HTTPException(400, "El nombre de usuario ya está en uso")
 
-# ==========================
-# API ENDPOINTS
-# ==========================
-@app.get("/")
-def root():
-    return {"status": "Bolsa Colonial activa"}
+    next_id = data.get("next_user_id", 1)
+    
+    new_user = {
+        "id": next_id,
+        "username": user_data.username,
+        "balance": 100.00,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "holdings": {"LUNA_CC": 0.0}
+    }
+    
+    users.append(new_user)
+    data["users"] = users
+    data["next_user_id"] = next_id + 1
+    
+    await update_bin(USERS_URL, data)
+    
+    return {"message": "Jugador registrado exitosamente", "user": new_user}
 
-
-@app.get("/market")
-def market():
-    db = SessionLocal()
-    market = get_market(db)
-
+@app.get("/api/market", summary="Ver precio actual de LUNA_CC")
+async def get_market():
+    data = await get_bin_data(MARKET_URL)
     return {
-        "symbol": market.symbol,
-        "name": market.name,
-        "price": market.price,
-        "last_update": datetime.utcnow().isoformat()
+        "symbol": data["symbol"],
+        "name": data["name"],
+        "current_price": round(data["current_price"], 6),
+        "last_updated": data["last_updated"]
     }
 
+@app.post("/api/buy", summary="Comprar LUNA_CC")
+async def buy(request: TradeRequest):
+    market = await get_bin_data(MARKET_URL)
+    users_data = await get_bin_data(USERS_URL)
+    
+    user = next((u for u in users_data["users"] if u["username"] == request.username), None)
+    if not user:
+        raise HTTPException(404, "Jugador no encontrado")
+    
+    price = Decimal(str(market["current_price"]))
+    cost = Decimal(str(request.quantity)) * price
+    
+    if Decimal(str(user["balance"])) < cost:
+        raise HTTPException(400, f"Saldo insuficiente (necesitas {float(cost):.2f})")
+    
+    user["balance"] = float(Decimal(str(user["balance"])) - cost)
+    user["holdings"]["LUNA_CC"] += request.quantity
+    
+    # Sube un poco el precio por demanda
+    new_price = Decimal(str(market["current_price"])) + Decimal("0.0005")
+    market["current_price"] = float(new_price.quantize(Decimal("0.000001")))
+    market["last_updated"] = datetime.utcnow().isoformat() + "Z"
+    
+    await update_bin(USERS_URL, users_data)
+    await update_bin(MARKET_URL, market)
+    
+    return {
+        "success": True,
+        "action": "compra",
+        "quantity": request.quantity,
+        "price_per_unit": float(price),
+        "total_cost": float(cost),
+        "new_balance": user["balance"],
+        "new_price": market["current_price"]
+    }
 
-@app.api_route("/buy", methods=["GET", "POST"])
-@app.api_route("/buy/", methods=["GET", "POST"])
-def buy(amount: float):
-    if amount <= 0:
-        return {"error": "Cantidad inválida"}
+@app.post("/api/sell", summary="Vender LUNA_CC")
+async def sell(request: TradeRequest):
+    market = await get_bin_data(MARKET_URL)
+    users_data = await get_bin_data(USERS_URL)
+    
+    user = next((u for u in users_data["users"] if u["username"] == request.username), None)
+    if not user:
+        raise HTTPException(404, "Jugador no encontrado")
+    
+    current_hold = user["holdings"].get("LUNA_CC", 0.0)
+    if current_hold < request.quantity:
+        raise HTTPException(400, f"No tienes suficientes LUNA_CC (tienes {current_hold})")
+    
+    price = Decimal(str(market["current_price"]))
+    income = Decimal(str(request.quantity)) * price
+    
+    user["balance"] = float(Decimal(str(user["balance"])) + income)
+    user["holdings"]["LUNA_CC"] -= request.quantity
+    
+    # Baja un poco el precio por oferta
+    new_price = Decimal(str(market["current_price"])) - Decimal("0.0005")
+    market["current_price"] = float(max(Decimal("0.01"), new_price).quantize(Decimal("0.000001")))
+    market["last_updated"] = datetime.utcnow().isoformat() + "Z"
+    
+    await update_bin(USERS_URL, users_data)
+    await update_bin(MARKET_URL, market)
+    
+    return {
+        "success": True,
+        "action": "venta",
+        "quantity": request.quantity,
+        "price_per_unit": float(price),
+        "total_income": float(income),
+        "new_balance": user["balance"],
+        "new_price": market["current_price"]
+    }
 
-    db = SessionLocal()
-    market = get_market(db)
+@app.get("/api/portfolio", summary="Ver portafolio de un jugador")
+async def portfolio(username: str = Query(..., description="Nombre de usuario")):
+    users_data = await get_bin_data(USERS_URL)
+    market = await get_bin_data(MARKET_URL)
+    
+    user = next((u for u in users_data["users"] if u["username"] == username), None)
+    if not user:
+        raise HTTPException(404, "Jugador no encontrado")
+    
+    holdings_qty = user["holdings"].get("LUNA_CC", 0.0)
+    holdings_value = holdings_qty * market["current_price"]
+    
+    return {
+        "username": user["username"],
+        "balance": user["balance"],
+        "holdings": {
+            "LUNA_CC": {
+                "quantity": holdings_qty,
+                "current_value": round(holdings_value, 2)
+            }
+        },
+        "total_assets": round(user["balance"] + holdings_value, 2),
+        "current_price": market["current_price"]
+    }
 
-    market.price = round(market.price + (amount * 0.001), 4)
-    db.commit()
-
-    return {"new_price": market.price}
-
-
-@app.api_route("/sell", methods=["GET", "POST"])
-@app.api_route("/sell/", methods=["GET", "POST"])
-def sell(amount: float):
-    if amount <= 0:
-        return {"error": "Cantidad inválida"}
-
-    db = SessionLocal()
-    market = get_market(db)
-
-    market.price = round(max(0.01, market.price - (amount * 0.001)), 4)
-    db.commit()
-
-    return {"new_price": market.price}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
