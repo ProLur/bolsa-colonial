@@ -1,254 +1,173 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Bolsa Colonial</title>
   <style>
+    :root {
+      --bg: #0a0e17;
+      --card: #1e293b;
+      --text: #e0e7ff;
+      --accent: #c084fc;
+      --accent-dark: #7c3aed;
+      --muted: #94a3b8;
+    }
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #0a0e17;
-      color: #e0e7ff;
       margin: 0;
-      padding: 20px;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
+      padding: 1rem;
     }
     .container {
       max-width: 480px;
       margin: 0 auto;
     }
-    h1 {
-      text-align: center;
-      color: #a5b4fc;
-      margin-bottom: 8px;
-      font-size: 2.5rem;
-    }
-    .subtitle {
-      text-align: center;
-      color: #94a3b8;
-      margin-bottom: 32px;
-      font-size: 1.1rem;
-    }
+    h1 { text-align: center; color: var(--accent); margin-bottom: 0.3em; }
+    .subtitle { text-align: center; color: var(--muted); margin-bottom: 1.5rem; }
     .card {
-      background: #1e293b;
+      background: var(--card);
       border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      padding: 1.5rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
       text-align: center;
     }
-    #username-display {
-      font-size: 1.1rem;
-      color: #c084fc;
-      margin-bottom: 16px;
-      font-weight: 500;
-    }
+    #username { font-size: 1.1rem; color: var(--accent); margin-bottom: 0.8rem; }
     #price {
       font-size: 3.8rem;
       font-weight: bold;
-      color: #c084fc;
-      margin: 16px 0;
+      color: var(--accent);
+      margin: 0.5rem 0;
       letter-spacing: -1px;
     }
-    #trend {
-      color: #94a3b8;
-      font-size: 1.05rem;
-      margin: 8px 0 24px;
+    #status {
+      color: var(--muted);
       min-height: 1.4em;
+      margin: 0.5rem 0 1.5rem;
     }
-    .actions {
+    .buttons {
       display: flex;
-      gap: 16px;
+      gap: 1rem;
       justify-content: center;
       flex-wrap: wrap;
     }
     button {
-      background: #7c3aed;
+      background: var(--accent-dark);
       color: white;
       border: none;
-      padding: 14px 28px;
-      font-size: 1.1rem;
+      padding: 0.9rem 1.8rem;
+      font-size: 1.05rem;
       border-radius: 8px;
       cursor: pointer;
-      transition: all 0.22s;
+      transition: all 0.2s;
       min-width: 140px;
     }
-    button:hover {
-      background: #9f7aea;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
-    }
-    button:active {
-      transform: translateY(0);
-    }
-    button:disabled {
-      background: #4b5563;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-    #loading {
-      display: none;
-      color: #94a3b8;
-      font-style: italic;
-      margin-top: 12px;
-    }
+    button:hover { background: #9f7aea; transform: translateY(-2px); }
+    button:active { transform: translateY(0); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #loading { display: none; color: var(--muted); font-style: italic; margin-top: 1rem; }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <h1>Bolsa Colonial</h1>
-    <p class="subtitle">Mercado interplanetario ficticio</p>
+<div class="container">
+  <h1>Bolsa Colonial</h1>
+  <p class="subtitle">Mercado interplanetario</p>
 
-    <div class="card">
-      <div id="username-display">Jugador: —</div>
-      <h2>LUNA CC</h2>
-      <div id="price">—</div>
-      <div id="trend">Conectando al mercado...</div>
+  <div class="card">
+    <div id="username">Jugador: —</div>
+    <h2>LUNA_CC</h2>
+    <div id="price">—</div>
+    <div id="status">Conectando…</div>
 
-      <div class="actions">
-        <button onclick="buy(100)">Comprar 100</button>
-        <button onclick="sell(100)">Vender 100</button>
-      </div>
-
-      <div id="loading">Procesando...</div>
+    <div class="buttons">
+      <button onclick="trade('buy', 100)">Comprar 100</button>
+      <button onclick="trade('sell', 100)">Vender 100</button>
     </div>
+
+    <div id="loading">Procesando...</div>
   </div>
+</div>
 
-  <script>
-    // ──────────────────────────────────────────────
-    // CONFIGURACIÓN
-    // ──────────────────────────────────────────────
-    const API_BASE = "http://localhost:8000/api";   // ← CAMBIAR cuando hagas deploy
-    // const API_BASE = "https://tu-app.onrender.com/api";   // ejemplo deploy
+<script>
+const API = "https://bolsa-colonial-api.onrender.com/api";  // ← tu URL real
+let user = localStorage.getItem("bolsaUser") || null;
 
-    let username = localStorage.getItem("bolsaColonialUsername") || null;
+async function refresh() {
+  const priceEl = document.getElementById("price");
+  const statusEl = document.getElementById("status");
+  const userEl = document.getElementById("username");
 
-    // ──────────────────────────────────────────────
-    // FUNCIONES PRINCIPALES
-    // ──────────────────────────────────────────────
+  userEl.textContent = user ? `Jugador: ${user}` : "Jugador: — (sin registrar)";
 
-    async function loadData() {
-      const priceEl = document.getElementById("price");
-      const trendEl = document.getElementById("trend");
-      const userDisplay = document.getElementById("username-display");
+  try {
+    // Precio
+    const m = await (await fetch(`${API}/market`)).json();
+    priceEl.textContent = m.current_price.toFixed(6);
 
-      if (username) {
-        userDisplay.textContent = `Jugador: ${username}`;
-      } else {
-        userDisplay.textContent = "Jugador: — (sin registrar)";
-      }
-
-      try {
-        // Precio del mercado
-        const marketRes = await fetch(`${API_BASE}/market`);
-        if (!marketRes.ok) throw new Error("No se pudo obtener precio");
-        const market = await marketRes.json();
-
-        priceEl.textContent = market.current_price.toFixed(6);
-
-        // Portafolio del usuario (si está logueado)
-        if (username) {
-          const portRes = await fetch(`\( {API_BASE}/portfolio?username= \){encodeURIComponent(username)}`);
-          if (portRes.ok) {
-            const port = await portRes.json();
-            const qty = port.holdings.LUNA_CC.quantity.toFixed(2);
-            const value = port.holdings.LUNA_CC.current_value.toFixed(2);
-            trendEl.innerHTML = `Saldo: <b>\( {port.balance.toFixed(2)}</b> | Tienes: <b> \){qty}</b> LUNA (${value})`;
-            trendEl.style.color = "#a5b4fc";
-          } else {
-            trendEl.textContent = "Error al cargar tu portafolio";
-          }
-        } else {
-          trendEl.textContent = "Regístrate para ver tu saldo y tenencias";
-        }
-      } catch (err) {
-        console.error(err);
-        priceEl.textContent = "Error";
-        trendEl.textContent = "No se pudo conectar al mercado";
-        trendEl.style.color = "#f87171";
-      }
+    // Portafolio
+    if (user) {
+      const p = await (await fetch(`\( {API}/portfolio?username= \){encodeURIComponent(user)}`)).json();
+      const q = p.holdings.LUNA_CC.quantity.toFixed(2);
+      const v = p.holdings.LUNA_CC.value.toFixed(2);
+      statusEl.innerHTML = `Saldo <b>\( {p.balance.toFixed(2)}</b>  •  Tienes <b> \){q}</b> LUNA (${v})`;
+    } else {
+      statusEl.textContent = "Regístrate para jugar";
     }
+  } catch (e) {
+    priceEl.textContent = "Error";
+    statusEl.textContent = "No se pudo conectar";
+    console.error(e);
+  }
+}
 
-    async function trade(action, qty) {
-      if (!username) {
-        registerPrompt();
-        return;
-      }
+async function trade(type, qty) {
+  if (!user) {
+    const name = prompt("Nombre de usuario (mín 3 letras):")?.trim();
+    if (!name || name.length < 3) return alert("Nombre inválido");
+    user = name;
+    localStorage.setItem("bolsaUser", user);
 
-      const loading = document.getElementById("loading");
-      loading.style.display = "block";
-
-      try {
-        const res = await fetch(`\( {API_BASE}/ \){action}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, quantity: qty })
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.detail || `Error al ${action === "buy" ? "comprar" : "vender"}`);
-        }
-
-        alert(
-          `${action === "buy" ? "¡Comprado!" : "¡Vendido!"} ${qty} LUNA_CC\n` +
-          `Nuevo precio: ${data.new_price.toFixed(6)}\n` +
-          `Tu saldo ahora: ${data.new_balance.toFixed(2)}`
-        );
-
-        await loadData();
-      } catch (err) {
-        alert(err.message);
-      } finally {
-        loading.style.display = "none";
-      }
-    }
-
-    function buy(qty)    { trade("buy",  qty); }
-    function sell(qty)   { trade("sell", qty); }
-
-    function registerPrompt() {
-      let name = prompt("Ingresa tu nombre de usuario para jugar (mínimo 3 letras):");
-      if (!name || name.trim().length < 3) {
-        alert("Nombre inválido o cancelado.");
-        return;
-      }
-
-      name = name.trim();
-      username = name;
-      localStorage.setItem("bolsaColonialUsername", username);
-
-      fetch(`${API_BASE}/register`, {
+    try {
+      const r = await fetch(`${API}/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.message?.includes("exitosamente")) {
-          alert(`¡Bienvenido, ${username}! Tienes 100 créditos iniciales.`);
-          loadData();
-        } else {
-          alert(data.detail || "El nombre ya está en uso. Elige otro.");
-          localStorage.removeItem("bolsaColonialUsername");
-          username = null;
-        }
-      })
-      .catch(() => {
-        alert("Error al registrarte. Intenta de nuevo.");
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username: user})
       });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || "Error");
+      alert(`¡Bienvenido ${user}! 100 créditos iniciales`);
+    } catch (e) {
+      alert(e.message);
+      localStorage.removeItem("bolsaUser");
+      user = null;
+      return;
     }
+  }
 
-    // ──────────────────────────────────────────────
-    // INICIO
-    // ──────────────────────────────────────────────
-    window.addEventListener("load", () => {
-      loadData();
-      // Opcional: refrescar cada 12 segundos
-      // setInterval(loadData, 12000);
+  document.getElementById("loading").style.display = "block";
+
+  try {
+    const r = await fetch(`\( {API}/ \){type}`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({username: user, quantity: qty})
     });
-  </script>
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `Error al ${type}`);
+    alert(`${type === 'buy' ? 'Comprado' : 'Vendido'} ${qty} LUNA\nNuevo precio: ${d.new_price.toFixed(6)}`);
+    await refresh();
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    document.getElementById("loading").style.display = "none";
+  }
+}
+
+window.addEventListener("load", refresh);
+// setInterval(refresh, 15000);  // opcional: refrescar cada 15 s
+</script>
 </body>
-</html>
+  </html>
