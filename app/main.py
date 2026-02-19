@@ -14,7 +14,7 @@ load_dotenv()
 app = FastAPI(
     title="Bolsa Colonial - JSONBin",
     description="Mercado ficticio LUNA_CC con saldos y tenencias por jugador",
-    version="0.1.0"
+    version="0.1.1"
 )
 
 # ──────────────────────────────────────────────
@@ -23,7 +23,7 @@ app = FastAPI(
 
 MASTER_KEY = os.getenv("JSONBIN_MASTER_KEY")
 if not MASTER_KEY:
-    raise ValueError("Falta la variable JSONBIN_MASTER_KEY")
+    raise RuntimeError("Falta la variable JSONBIN_MASTER_KEY en .env o en variables de entorno")
 
 HEADERS = {
     "Content-Type": "application/json",
@@ -34,21 +34,27 @@ MARKET_BIN_ID = os.getenv("MARKET_BIN_ID")
 USERS_BIN_ID = os.getenv("USERS_BIN_ID")
 
 if not MARKET_BIN_ID or not USERS_BIN_ID:
-    raise ValueError("Faltan MARKET_BIN_ID o USERS_BIN_ID")
+    raise RuntimeError("Faltan MARKET_BIN_ID o USERS_BIN_ID en variables de entorno")
 
 MARKET_URL = f"https://api.jsonbin.io/v3/b/{MARKET_BIN_ID}"
 USERS_URL = f"https://api.jsonbin.io/v3/b/{USERS_BIN_ID}"
 
 async def get_bin(url: str) -> Dict[str, Any]:
     async with httpx.AsyncClient() as client:
-        r = await client.get(f"{url}/latest", headers=HEADERS, timeout=10)
-        r.raise_for_status()
-        return r.json()["record"]
+        try:
+            r = await client.get(f"{url}/latest", headers=HEADERS, timeout=12.0)
+            r.raise_for_status()
+            return r.json()["record"]
+        except Exception as e:
+            raise HTTPException(503, f"No se pudo leer JSONBin: {str(e)}")
 
 async def put_bin(url: str, data: Dict[str, Any]):
     async with httpx.AsyncClient() as client:
-        r = await client.put(url, json=data, headers=HEADERS, timeout=10)
-        r.raise_for_status()
+        try:
+            r = await client.put(url, json=data, headers=HEADERS, timeout=12.0)
+            r.raise_for_status()
+        except Exception as e:
+            raise HTTPException(503, f"No se pudo guardar en JSONBin: {str(e)}")
 
 # ──────────────────────────────────────────────
 # MODELOS
@@ -62,13 +68,27 @@ class TradeRequest(BaseModel):
     quantity: float = Field(..., gt=0)
 
 # ──────────────────────────────────────────────
-# RUTAS
+# SERVIR FRONTEND EN RAÍZ
 # ──────────────────────────────────────────────
 
-@app.get("/", include_in_schema=False)
-@app.get("/index", include_in_schema=False)
-async def serve_frontend():
-    return FileResponse("static/index.html")
+app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+
+@app.get("/", response_class=FileResponse, include_in_schema=False)
+@app.get("/index", response_class=FileResponse, include_in_schema=False)
+async def serve_game():
+    index_path = "static/index.html"
+    if not os.path.exists(index_path):
+        return FileResponse("static/index.html", status_code=404)  # fallback si no existe
+    return FileResponse(index_path)
+
+# Ruta de fallback para evitar 404 crudo en otras rutas no definidas
+@app.get("/{path:path}", include_in_schema=False)
+async def catch_all(path: str):
+    return {"error": "Ruta no encontrada", "docs": "/docs", "market": "/api/market"}
+
+# ──────────────────────────────────────────────
+# RUTAS API
+# ──────────────────────────────────────────────
 
 @app.get("/api/market")
 async def get_market():
@@ -104,7 +124,7 @@ async def register(user: UserCreate):
 
     await put_bin(USERS_URL, data)
 
-    return {"message": "Jugador registrado", "user": new_user}
+    return {"message": "Jugador registrado exitosamente", "user": new_user}
 
 @app.post("/api/buy")
 async def buy(req: TradeRequest):
@@ -124,7 +144,6 @@ async def buy(req: TradeRequest):
     user["balance"] = float(Decimal(str(user["balance"])) - cost)
     user["holdings"]["LUNA_CC"] = user["holdings"].get("LUNA_CC", 0.0) + req.quantity
 
-    # Subida ligera por demanda
     market["current_price"] = float((Decimal(str(market["current_price"])) + Decimal("0.0005")).quantize(Decimal("0.000001")))
     market["last_updated"] = datetime.utcnow().isoformat() + "Z"
 
@@ -158,7 +177,6 @@ async def sell(req: TradeRequest):
     user["balance"] = float(Decimal(str(user["balance"])) + income)
     user["holdings"]["LUNA_CC"] = hold - req.quantity
 
-    # Bajada ligera por oferta
     new_p = Decimal(str(market["current_price"])) - Decimal("0.0005")
     market["current_price"] = float(max(Decimal("0.01"), new_p).quantize(Decimal("0.000001")))
     market["last_updated"] = datetime.utcnow().isoformat() + "Z"
@@ -194,9 +212,6 @@ async def portfolio(username: str = Query(...)):
         "current_price": round(market["current_price"], 6)
     }
 
-# Montar carpeta static (para servir index.html y otros assets)
-app.mount("/static", StaticFiles(directory="static", html=True), name="static")
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
